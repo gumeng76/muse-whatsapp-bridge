@@ -78,8 +78,12 @@ def main():
         data=json.dumps(payload).encode('utf-8'),
         headers={'Content-Type': 'application/json'},
     )
+    # The send API is always localhost: bypass env proxies entirely, and
+    # allow 120s — the gateway itself retries sends with a 45s timeout
+    # (worst case ~92s), so the client must outwait it, not hang past it.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        resp = urllib.request.urlopen(req, timeout=60).read().decode()
+        resp = opener.open(req, timeout=120).read().decode()
         print(resp)
     except Exception as e:
         print('SEND_FAILED: ' + str(e), file=sys.stderr)

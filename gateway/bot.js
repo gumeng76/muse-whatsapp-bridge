@@ -271,6 +271,26 @@ function isImageExt(file) {
     return ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(path.extname(file).toLowerCase());
 }
 
+// sendMessage can stall indefinitely inside Baileys' media upload
+// (seen in production: a 152KB image hung >5min with no error). Bound it:
+// 45s per attempt, one retry, then fail loudly so callers never hang.
+async function sendWithRetry(chatId, content) {
+    let lastErr;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            return await Promise.race([
+                sock.sendMessage(chatId, content),
+                new Promise((_, reject) => setTimeout(
+                    () => reject(new Error(`sendMessage timeout (attempt ${attempt})`)), 45000)),
+            ]);
+        } catch (e) {
+            lastErr = e;
+            if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+        }
+    }
+    throw lastErr;
+}
+
 const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && req.url === '/send') {
         let body = '';
@@ -293,11 +313,11 @@ const server = http.createServer(async (req, res) => {
                     const cap = caption || text || '';
                     const data = fs.readFileSync(file);
                     if (isImageExt(file)) {
-                        await sock.sendMessage(chatId, {
+                        await sendWithRetry(chatId, {
                             image: data, caption: cap, ...msgOpts
                         });
                     } else {
-                        await sock.sendMessage(chatId, {
+                        await sendWithRetry(chatId, {
                             document: data,
                             mimetype: mimeForFile(file),
                             fileName: path.basename(file),
@@ -306,7 +326,7 @@ const server = http.createServer(async (req, res) => {
                     }
                     logMsg({ type: 'sent', ts: new Date().toISOString(), to: chatId, media: file, caption: cap });
                 } else {
-                    await sock.sendMessage(chatId, { text: text || '', ...msgOpts });
+                    await sendWithRetry(chatId, { text: text || '', ...msgOpts });
                     logMsg({ type: 'sent', ts: new Date().toISOString(), to: chatId, text });
                 }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
