@@ -88,12 +88,18 @@ One file: `bridge.config.json` (template in `config/bridge.example.json`).
 - `triggers.toMain` / `triggers.toSidechat` — owner-only DM phrases that
   switch your DM between the main chat and its side chat. They only fire at
   the very start of a message and only for the owner.
+- `triggers.toVoice` / `triggers.toText` — owner-only DM phrases that switch
+  the default reply form for your DMs: voice notes or text. The current form
+  is stamped onto every owner-DM queue entry as `replyMode`, so whichever
+  chat answers knows how to reply. Long or structured content (reports,
+  links, lists) still goes as text either way.
 - `groupLabels` — optional short labels per group id.
 - `gateway.port` — gateway HTTP port (default 18924).
 
 State files (auto-created, git-ignored): `chat-mapping.json`
 (convoId -> side chat id), `channel-mode.json` (owner DM routing mode),
-`forward-queue.jsonl`, `.relay_cursor`.
+`reply-mode.json` (owner DM reply form), `forward-queue.jsonl`,
+`.relay_cursor`.
 
 ## License
 

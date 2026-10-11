@@ -22,6 +22,8 @@ OWNER_DM = CFG.get("ownerDm", "")
 OWNER_LABEL = CFG.get("ownerLabel", "owner")
 TRIG_MAIN = CFG.get("triggers", {}).get("toMain", "talk to main")
 TRIG_SIDE = CFG.get("triggers", {}).get("toSidechat", ["back to side chat"])
+TRIG_VOICE = CFG.get("triggers", {}).get("toVoice", ["voice replies"])
+TRIG_TEXT = CFG.get("triggers", {}).get("toText", ["text replies"])
 MERGE_WINDOW = 5.0      # 同一 convoId 5 秒内连续消息合并
 FLUSH_IDLE = 7.0        # 超过此秒数无新事件则刷出本轮
 ABS_TIMEOUT = 30 * 60   # 兜底超时
@@ -38,6 +40,22 @@ def write_mode(mode):
         json.dump({"dm_mode": mode,
                    "updated_ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                    "note": "sidechat=owner DM to its side chat; main=owner DM straight to main chat"},
+                  f, ensure_ascii=False)
+
+REPLY_MODE_FILE = os.path.join(DIR, "reply-mode.json")
+
+def read_reply_mode():
+    try:
+        with open(REPLY_MODE_FILE) as f:
+            return json.load(f).get("dm_reply_mode", "text")
+    except Exception:
+        return "text"
+
+def write_reply_mode(mode):
+    with open(REPLY_MODE_FILE, "w") as f:
+        json.dump({"dm_reply_mode": mode,
+                   "updated_ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                   "note": "text=replies as text; voice=replies as voice notes (long/structured content still goes as text)"},
                   f, ensure_ascii=False)
 
 def q(entry):
@@ -198,12 +216,39 @@ def handle(ev):
                 q(entry)
                 reports.append(("单聊", convo, "WA: %s" % nick, "需回复", rest[:60]))
             return
+        # --- Reply-form switch (owner DM only): voice vs text replies.
+        # Orthogonal to the channel switch above. The chosen form is
+        # stamped onto every owner-DM queue entry as "replyMode", so the
+        # handling chat (main or side chat) knows how to answer.
+        m_voice = (re.match(r'^\s*(' + '|'.join(re.escape(t) for t in TRIG_VOICE) + r')\s*[:：]?\s*(.*)$', body, re.S) if is_owner_dm else None)
+        m_text = (re.match(r'^\s*(' + '|'.join(re.escape(t) for t in TRIG_TEXT) + r')\s*[:：]?\s*(.*)$', body, re.S) if is_owner_dm else None)
+        if m_voice or m_text:
+            new_rm = "voice" if m_voice else "text"
+            write_reply_mode(new_rm)
+            back = TRIG_TEXT[0] if new_rm == "voice" else TRIG_VOICE[0]
+            q({"ts": ts, "convoId": convo, "fromName": author, "body": body,
+               "needReply": False, "directMain": False, "sideChatName": "WA: " + OWNER_LABEL,
+               "forwardText": "[system] Reply form switched to %s (say '%s' to switch back)" % (new_rm, back)})
+            reports.append(("system", convo, "WA: " + OWNER_LABEL, "->" + new_rm, "reply form switched"))
+            rest = (m_voice or m_text).group(2).strip()
+            if rest:
+                entry = {"ts": ts, "convoId": convo, "fromName": author, "body": rest,
+                         "needReply": True, "sideChatName": "WA: %s" % nick,
+                         "replyMode": new_rm,
+                         "fwdHead": "[需回复]【WhatsApp 单聊｜%s】\n%s: " % (nick, author),
+                         "fwdTail": fwdTail}
+                if read_mode() == "main":
+                    entry["directMain"] = True
+                add_or_merge(convo, entry)
+            return
         entry = {"ts": ts, "convoId": convo, "fromName": author, "body": body,
                  "needReply": True, "sideChatName": "WA: %s" % nick,
                  "fwdHead": "[需回复]【WhatsApp 单聊｜%s】\n%s: " % (nick, author),
                  "fwdTail": fwdTail}
         if is_owner_dm and read_mode() == "main":
             entry["directMain"] = True
+        if is_owner_dm:
+            entry["replyMode"] = read_reply_mode()
         add_or_merge(convo, entry)
         return
 
