@@ -188,6 +188,41 @@ def handle(ev):
     is_owner_dm = (convo == OWNER_DM)  # 直连通道仅限owner DM
     if is_dm:
         nick = author or convo.split("@")[0][:8]
+        # --- Bracket scope (owner DM only): a trigger phrase wrapped in
+        # brackets applies to the bracketed question only. Each bracketed
+        # segment becomes its own one-shot entry; the text outside the
+        # brackets flows on through the normal logic and the saved
+        # default is untouched (even if the bracket says "switch").
+        # Ordinary brackets (inner text not starting with a trigger)
+        # are not affected.
+        if is_owner_dm:
+            _all_trig = TRIG_VOICE_SWITCH + TRIG_VOICE + TRIG_TEXT_SWITCH + TRIG_TEXT
+            _voice_trig = set(TRIG_VOICE_SWITCH + TRIG_VOICE)
+            seg_pat = re.compile(r'[（(【\[「『](?P<inner>\s*(?:' + '|'.join(re.escape(t) for t in _all_trig) + r')\s*[:：]?\s*[^（）()【】\[\]「」『』]*?)[）)】\]」』]')
+            if seg_pat.search(body):
+                for s in seg_pat.finditer(body):
+                    tm = re.match(r'\s*(' + '|'.join(re.escape(t) for t in _all_trig) + r')\s*[:：]?\s*(.*)$', s.group("inner"), re.S)
+                    form = "voice" if tm.group(1) in _voice_trig else "text"
+                    content = tm.group(2).strip()
+                    if content:
+                        if read_mode() == "main":
+                            q({"ts": ts, "convoId": convo, "fromName": author, "body": content,
+                               "needReply": True, "directMain": True, "sideChatName": "WA: " + OWNER_LABEL,
+                               "replyMode": form, "replyModeOnce": True,
+                               "forwardText": "[WhatsApp direct] %s: %s" % (author, content)})
+                        else:
+                            q({"ts": ts, "convoId": convo, "fromName": author, "body": content,
+                               "needReply": True, "sideChatName": "WA: %s" % nick,
+                               "replyMode": form, "replyModeOnce": True,
+                               "forwardText": "[需回复]【WhatsApp 单聊｜%s】\n%s: %s" % (nick, author, content)})
+                        reports.append(("bracket", convo, "WA: " + OWNER_LABEL, "once-" + form, content[:60]))
+                    else:
+                        q({"ts": ts, "convoId": convo, "fromName": author, "body": body,
+                           "needReply": False, "directMain": False, "sideChatName": "WA: " + OWNER_LABEL,
+                           "forwardText": "[system] Bracketed one-shot %s reply (no content; default unchanged)" % form})
+                body = seg_pat.sub(" ", body).strip()
+                if not body:
+                    return
         # --- 直连通道切换（仅 DM）---
         # 触发语必须出现在开头（允许"和main说：..."带内容），避免正文提到触发语被误判
         m_main = (re.match(r'^\s*' + re.escape(TRIG_MAIN) + r'\s*[:：]?\s*(.*)$', body, re.S) if is_owner_dm else None)
