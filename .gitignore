@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# runtime state — NEVER commit these
+auth/
+*.jsonl
+*.log
+forward-queue.lock
+.relay_cursor
+.*.pid
+.watchdog-notready-since
+
+# live config & mappings (examples live in config/)
+bridge.config.json
+chat-mapping.json
+channel-mode.json
+active-link.json
+
+# media payloads
+media/
+
+# misc
+__pycache__/
+.DS_Store
