@@ -29,6 +29,28 @@ TRIG_TEXT = CFG.get("triggers", {}).get("toText", ["text replies"])
 # as one-shot). Matched phrases are compared against these lists.
 TRIG_VOICE_SWITCH = CFG.get("triggers", {}).get("toVoiceSwitch", ["switch to voice replies"])
 TRIG_TEXT_SWITCH = CFG.get("triggers", {}).get("toTextSwitch", ["switch to text replies"])
+# Optional inbound speech-to-text: a local command (argv list) that takes
+# an audio file path as its last argument and prints the transcript to
+# stdout. It runs at intake, inside the pipeline, so the chats that handle
+# the message receive the transcript with the entry instead of each having
+# to invoke transcription themselves. Example with faster-whisper:
+# ["/path/to/venv/bin/python", "/path/to/transcribe.py"]. Empty = off.
+STT_COMMAND = CFG.get("sttCommand", [])
+STT_TIMEOUT = int(CFG.get("sttTimeoutSec", 90))
+AUDIO_EXTS = (".ogg", ".opus", ".mp3", ".m4a", ".wav", ".webm")
+
+def transcribe_audio(path):
+    if not STT_COMMAND:
+        return None
+    try:
+        r = subprocess.run(list(STT_COMMAND) + [path],
+                           capture_output=True, text=True, timeout=STT_TIMEOUT)
+        if r.returncode == 0:
+            return (r.stdout or "").strip() or None
+    except Exception:
+        pass
+    return None
+
 MERGE_WINDOW = 5.0      # 同一 convoId 5 秒内连续消息合并
 FLUSH_IDLE = 7.0        # 超过此秒数无新事件则刷出本轮
 ABS_TIMEOUT = 30 * 60   # 兜底超时
@@ -180,6 +202,10 @@ def handle(ev):
     fwdTail = ""
     if ev.get("hasMedia") and ev.get("mediaPath"):
         fwdTail += " [media: %s]" % ev["mediaPath"]
+        if ev["mediaPath"].lower().endswith(AUDIO_EXTS):
+            _tr = transcribe_audio(ev["mediaPath"])
+            if _tr:
+                fwdTail += " [transcript: %s]" % _tr
     mentioned = ev.get("mentionedIds") or []
     if mentioned:
         fwdTail += " [mentioned: %s]" % ",".join(mentioned)
