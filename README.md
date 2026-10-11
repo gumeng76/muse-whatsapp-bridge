@@ -56,6 +56,7 @@ Key design rules (learned in production):
 | `relay/relay.js` | Inotify tail of the journal; emits one line per new inbound message; cursor persisted in `.relay_cursor`. |
 | `relay/drain-queue.py` | Atomic per-conversation queue drain (`<convoId>`), peek (`--peek`), and main-triage peek (`--peek-main`: unmapped / direct / stale > 10min). Shares the queue lock with the detector. |
 | `tools/send.py` | Send CLI used by agents: text, `--mentions`, `--media`, `--caption`. Reads the gateway port from `bridge.config.json`. |
+| `tools/transcribe.py` | Optional agent-side speech-to-text for incoming voice notes (local faster-whisper). The pipeline only delivers the media file; understanding it is the agent's job. Setup: `tools/stt-requirements.txt`. |
 | `ops/` | Self-healing: `gateway-monitor.sh` (revives the gateway, records exit codes), `detector-daemon.sh` (start/stop/status), `detector-cron.sh` (cron guardian: revives the daemon, one-shot backup round only if that fails). |
 | `adapters/muse/` | The Muse integration: wake-hook scripts + templates, side-chat instruction template, setup guide. |
 

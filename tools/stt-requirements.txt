@@ -1,0 +1,5 @@
+# Speech-to-text helper (tools/transcribe.py)
+faster-whisper>=1.0
+# Pin PyAV: faster-whisper's decode_audio passes metadata_errors to
+# av.open(), which newer PyAV releases removed.
+av==12.3.0
