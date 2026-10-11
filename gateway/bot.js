@@ -270,6 +270,9 @@ function mimeForFile(file) {
 function isImageExt(file) {
     return ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(path.extname(file).toLowerCase());
 }
+function isAudioExt(file) {
+    return ['.ogg', '.opus', '.mp3', '.m4a', '.aac', '.wav'].includes(path.extname(file).toLowerCase());
+}
 
 // sendMessage can stall indefinitely inside Baileys' media upload
 // (seen in production: a 152KB image hung >5min with no error). Bound it:
@@ -312,7 +315,16 @@ const server = http.createServer(async (req, res) => {
                     const file = resolveMedia(media);
                     const cap = caption || text || '';
                     const data = fs.readFileSync(file);
-                    if (isImageExt(file)) {
+                    if (isAudioExt(file)) {
+                        // Voice note (PTT). WhatsApp wants Opus-in-OGG for a
+                        // proper voice-message bubble; other audio formats
+                        // are sent as plain audio. Captions don't apply.
+                        const ext = path.extname(file).toLowerCase();
+                        const audioMsg = { audio: data, ptt: true, ...msgOpts };
+                        audioMsg.mimetype = (ext === '.ogg' || ext === '.opus')
+                            ? 'audio/ogg; codecs=opus' : mimeForFile(file);
+                        await sendWithRetry(chatId, audioMsg);
+                    } else if (isImageExt(file)) {
                         await sendWithRetry(chatId, {
                             image: data, caption: cap, ...msgOpts
                         });
