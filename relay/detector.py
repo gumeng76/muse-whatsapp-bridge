@@ -24,6 +24,11 @@ TRIG_MAIN = CFG.get("triggers", {}).get("toMain", "talk to main")
 TRIG_SIDE = CFG.get("triggers", {}).get("toSidechat", ["back to side chat"])
 TRIG_VOICE = CFG.get("triggers", {}).get("toVoice", ["voice replies"])
 TRIG_TEXT = CFG.get("triggers", {}).get("toText", ["text replies"])
+# Explicit "switch" phrases: always change the saved default, even when
+# they carry colon-led or wrapped content (the plain phrases treat that
+# as one-shot). Matched phrases are compared against these lists.
+TRIG_VOICE_SWITCH = CFG.get("triggers", {}).get("toVoiceSwitch", ["switch to voice replies"])
+TRIG_TEXT_SWITCH = CFG.get("triggers", {}).get("toTextSwitch", ["switch to text replies"])
 MERGE_WINDOW = 5.0      # 同一 convoId 5 秒内连续消息合并
 FLUSH_IDLE = 7.0        # 超过此秒数无新事件则刷出本轮
 ABS_TIMEOUT = 30 * 60   # 兜底超时
@@ -225,8 +230,10 @@ def handle(ev):
         # message only (entry gets "replyModeOnce": true) and leaves the
         # saved default untouched; anything else (bare trigger, or
         # content appended without a colon) switches the default.
-        m_voice = (re.match(r'^\s*(?P<wrap>[（(【\[「『"“]?)\s*(?:' + '|'.join(re.escape(t) for t in TRIG_VOICE) + r')\s*(?P<colon>[:：])?\s*(?P<rest>.*)$', body, re.S) if is_owner_dm else None)
-        m_text = (re.match(r'^\s*(?P<wrap>[（(【\[「『"“]?)\s*(?:' + '|'.join(re.escape(t) for t in TRIG_TEXT) + r')\s*(?P<colon>[:：])?\s*(?P<rest>.*)$', body, re.S) if is_owner_dm else None)
+        # Explicit switch phrases (toVoiceSwitch/toTextSwitch) always
+        # switch the default, overriding the one-shot heuristics.
+        m_voice = (re.match(r'^\s*(?P<wrap>[（(【\[「『"“]?)\s*(?P<trig>' + '|'.join(re.escape(t) for t in TRIG_VOICE_SWITCH + TRIG_VOICE) + r')\s*(?P<colon>[:：])?\s*(?P<rest>.*)$', body, re.S) if is_owner_dm else None)
+        m_text = (re.match(r'^\s*(?P<wrap>[（(【\[「『"“]?)\s*(?P<trig>' + '|'.join(re.escape(t) for t in TRIG_TEXT_SWITCH + TRIG_TEXT) + r')\s*(?P<colon>[:：])?\s*(?P<rest>.*)$', body, re.S) if is_owner_dm else None)
         if m_voice or m_text:
             mm = m_voice or m_text
             new_rm = "voice" if m_voice else "text"
@@ -237,7 +244,9 @@ def handle(ev):
                           "「": "」", "『": "』", '"': '"', "“": "”"}.get(wrap)
                 if closer and rest.endswith(closer):
                     rest = rest[: -len(closer)].strip()
-            one_shot = bool(wrap) or (bool(mm.group("colon")) and bool(rest))
+            # Explicit switch phrases always switch the default.
+            force_switch = mm.group("trig") in (TRIG_VOICE_SWITCH if m_voice else TRIG_TEXT_SWITCH)
+            one_shot = (bool(wrap) or (bool(mm.group("colon")) and bool(rest))) and not force_switch
             if one_shot:
                 reports.append(("system", convo, "WA: " + OWNER_LABEL, "->once-" + new_rm, "one-shot reply form (default unchanged)"))
                 if not rest:

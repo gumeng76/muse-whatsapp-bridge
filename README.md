@@ -95,8 +95,10 @@ One file: `bridge.config.json` (template in `config/bridge.example.json`).
   is wrapped in brackets/quotes or introduced by a colon (e.g.
   `voice replies: tell me a joke`), it applies to that message only
   (`replyModeOnce`) and the saved default is untouched; a bare trigger
-  switches the default. Long or structured content (reports, links, lists)
-  still goes as text either way.
+  switches the default. Explicit switch phrases (`triggers.toVoiceSwitch`
+  / `toTextSwitch`, e.g. `switch to voice replies`) always switch the
+  default, even with colon-led or wrapped content. Long or structured
+  content (reports, links, lists) still goes as text either way.
 - `groupLabels` — optional short labels per group id.
 - `gateway.port` — gateway HTTP port (default 18924).
 
