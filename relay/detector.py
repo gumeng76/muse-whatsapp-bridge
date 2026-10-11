@@ -291,9 +291,14 @@ def handle(ev):
             else:
                 write_reply_mode(new_rm)
                 back = TRIG_TEXT[0] if new_rm == "voice" else TRIG_VOICE[0]
+                # A default switch always gets an explicit TEXT confirmation
+                # stating the new default: the entry is marked needReply and
+                # routed to the handling chat, which sends the confirmation
+                # (in text, even when the new default is voice).
                 q({"ts": ts, "convoId": convo, "fromName": author, "body": body,
-                   "needReply": False, "directMain": False, "sideChatName": "WA: " + OWNER_LABEL,
-                   "forwardText": "[system] Reply form switched to %s (say '%s' to switch back)" % (new_rm, back)})
+                   "needReply": True, "directMain": read_mode() == "main", "sideChatName": "WA: " + OWNER_LABEL,
+                   "replyMode": new_rm,
+                   "forwardText": "[system] Default reply form switched to %s (say '%s' to switch back). Reply with a text confirmation: current default reply form is %s" % (new_rm, back, new_rm)})
                 reports.append(("system", convo, "WA: " + OWNER_LABEL, "->" + new_rm, "reply form switched"))
             if rest:
                 entry = {"ts": ts, "convoId": convo, "fromName": author, "body": rest,
