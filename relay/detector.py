@@ -216,27 +216,49 @@ def handle(ev):
                 q(entry)
                 reports.append(("单聊", convo, "WA: %s" % nick, "需回复", rest[:60]))
             return
-        # --- Reply-form switch (owner DM only): voice vs text replies.
+        # --- Reply form (owner DM only): voice vs text replies.
         # Orthogonal to the channel switch above. The chosen form is
         # stamped onto every owner-DM queue entry as "replyMode", so the
         # handling chat (main or side chat) knows how to answer.
-        m_voice = (re.match(r'^\s*(' + '|'.join(re.escape(t) for t in TRIG_VOICE) + r')\s*[:：]?\s*(.*)$', body, re.S) if is_owner_dm else None)
-        m_text = (re.match(r'^\s*(' + '|'.join(re.escape(t) for t in TRIG_TEXT) + r')\s*[:：]?\s*(.*)$', body, re.S) if is_owner_dm else None)
+        # Default-switch vs one-shot: a trigger whose content is wrapped
+        # in brackets/quotes, or introduced by a colon, applies to that
+        # message only (entry gets "replyModeOnce": true) and leaves the
+        # saved default untouched; anything else (bare trigger, or
+        # content appended without a colon) switches the default.
+        m_voice = (re.match(r'^\s*(?P<wrap>[（(【\[「『"“]?)\s*(?:' + '|'.join(re.escape(t) for t in TRIG_VOICE) + r')\s*(?P<colon>[:：])?\s*(?P<rest>.*)$', body, re.S) if is_owner_dm else None)
+        m_text = (re.match(r'^\s*(?P<wrap>[（(【\[「『"“]?)\s*(?:' + '|'.join(re.escape(t) for t in TRIG_TEXT) + r')\s*(?P<colon>[:：])?\s*(?P<rest>.*)$', body, re.S) if is_owner_dm else None)
         if m_voice or m_text:
+            mm = m_voice or m_text
             new_rm = "voice" if m_voice else "text"
-            write_reply_mode(new_rm)
-            back = TRIG_TEXT[0] if new_rm == "voice" else TRIG_VOICE[0]
-            q({"ts": ts, "convoId": convo, "fromName": author, "body": body,
-               "needReply": False, "directMain": False, "sideChatName": "WA: " + OWNER_LABEL,
-               "forwardText": "[system] Reply form switched to %s (say '%s' to switch back)" % (new_rm, back)})
-            reports.append(("system", convo, "WA: " + OWNER_LABEL, "->" + new_rm, "reply form switched"))
-            rest = (m_voice or m_text).group(2).strip()
+            rest = mm.group("rest").strip()
+            wrap = mm.group("wrap")
+            if wrap and rest:
+                closer = {"（": "）", "(": ")", "【": "】", "[": "]",
+                          "「": "」", "『": "』", '"': '"', "“": "”"}.get(wrap)
+                if closer and rest.endswith(closer):
+                    rest = rest[: -len(closer)].strip()
+            one_shot = bool(wrap) or (bool(mm.group("colon")) and bool(rest))
+            if one_shot:
+                reports.append(("system", convo, "WA: " + OWNER_LABEL, "->once-" + new_rm, "one-shot reply form (default unchanged)"))
+                if not rest:
+                    q({"ts": ts, "convoId": convo, "fromName": author, "body": body,
+                       "needReply": False, "directMain": False, "sideChatName": "WA: " + OWNER_LABEL,
+                       "forwardText": "[system] One-shot %s reply (no content; default unchanged)" % new_rm})
+            else:
+                write_reply_mode(new_rm)
+                back = TRIG_TEXT[0] if new_rm == "voice" else TRIG_VOICE[0]
+                q({"ts": ts, "convoId": convo, "fromName": author, "body": body,
+                   "needReply": False, "directMain": False, "sideChatName": "WA: " + OWNER_LABEL,
+                   "forwardText": "[system] Reply form switched to %s (say '%s' to switch back)" % (new_rm, back)})
+                reports.append(("system", convo, "WA: " + OWNER_LABEL, "->" + new_rm, "reply form switched"))
             if rest:
                 entry = {"ts": ts, "convoId": convo, "fromName": author, "body": rest,
                          "needReply": True, "sideChatName": "WA: %s" % nick,
                          "replyMode": new_rm,
                          "fwdHead": "[需回复]【WhatsApp 单聊｜%s】\n%s: " % (nick, author),
                          "fwdTail": fwdTail}
+                if one_shot:
+                    entry["replyModeOnce"] = True
                 if read_mode() == "main":
                     entry["directMain"] = True
                 add_or_merge(convo, entry)

@@ -91,8 +91,12 @@ One file: `bridge.config.json` (template in `config/bridge.example.json`).
 - `triggers.toVoice` / `triggers.toText` — owner-only DM phrases that switch
   the default reply form for your DMs: voice notes or text. The current form
   is stamped onto every owner-DM queue entry as `replyMode`, so whichever
-  chat answers knows how to reply. Long or structured content (reports,
-  links, lists) still goes as text either way.
+  chat answers knows how to reply. One-shot form: if the trigger's content
+  is wrapped in brackets/quotes or introduced by a colon (e.g.
+  `voice replies: tell me a joke`), it applies to that message only
+  (`replyModeOnce`) and the saved default is untouched; a bare trigger
+  switches the default. Long or structured content (reports, links, lists)
+  still goes as text either way.
 - `groupLabels` — optional short labels per group id.
 - `gateway.port` — gateway HTTP port (default 18924).
 
