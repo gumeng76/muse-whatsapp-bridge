@@ -55,6 +55,7 @@ Key design rules (learned in production):
 | `relay/detector.py` | Resident detector (`--daemon`): tails the journal via `relay.js`, filters, merges bursts (5s), tags entries `[reply]` / `[log-only]`, handles the owner's channel-mode triggers, appends to `forward-queue.jsonl` under flock. |
 | `relay/relay.js` | Inotify tail of the journal; emits one line per new inbound message; cursor persisted in `.relay_cursor`. |
 | `relay/drain-queue.py` | Atomic per-conversation queue drain (`<convoId>`), peek (`--peek`), and main-triage peek (`--peek-main`: unmapped / direct / stale > 10min). Shares the queue lock with the detector. |
+| `relay/router-act.py` | Deterministic routing-action executor for owner-DM commands (`switch-main`, `switch-sidechat`, `replymode voice\|text`, `requeue-main`). Called by the classifier worker per `docs/router-rules.md`; makes no decisions itself. Reads `ownerDm`/`ownerLabel` from `bridge.config.json`. |
 | `tools/send.py` | Send CLI used by agents: text, `--mentions`, `--media`, `--caption`. Reads the gateway port from `bridge.config.json`. |
 | `tools/transcribe.py` | Optional agent-side speech-to-text for incoming voice notes (local faster-whisper). The pipeline only delivers the media file; understanding it is the agent's job. Setup: `tools/stt-requirements.txt`. |
 | `ops/` | Self-healing: `gateway-monitor.sh` (revives the gateway, records exit codes), `detector-daemon.sh` (start/stop/status), `detector-cron.sh` (cron guardian: revives the daemon, one-shot backup round only if that fails). |
