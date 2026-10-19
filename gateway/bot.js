@@ -99,7 +99,8 @@ async function createSocket() {
     const { state, saveCreds } = await useMultiFileAuthState(
         path.join(__dirname, 'auth', 'baileys')
     );
-    const proxyAgent = new HttpsProxyAgent('http://127.0.0.1:8899');
+    // 代理地址可配：WA_PROXY 环境变量覆盖，缺省为本地 chain-proxy
+    const proxyAgent = new HttpsProxyAgent(process.env.WA_PROXY || 'http://127.0.0.1:8899');
     const s = makeWASocket({
         version: WA_VERSION,
         auth: state,
